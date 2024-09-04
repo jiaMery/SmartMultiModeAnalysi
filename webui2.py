@@ -122,7 +122,7 @@ def fn_dilation(image: np.ndarray, kernel_size: int = 3) -> np.ndarray:
     dilated_image = cv2.dilate(image, kernel, iterations=1)
     return dilated_image
 
-def fn_watermark(image: np.ndarray, watermark_path: str = "sampleImage/water.png") -> np.ndarray:
+def fn_watermark(image: np.ndarray, watermark_path: str = "data/image/water.png") -> np.ndarray:
     '''
     添加水印函数
     参数：
@@ -458,26 +458,26 @@ def fn_save_video_webcam(input_image):
 
 # 示例图片
 examples_imgs = [
-    ["sampleImage/1.png"],
-    ["sampleImage/2.png"],
-    ["sampleImage/3.png"],
-    ["sampleImage/4.png"],
-    ["sampleImage/5.png"],
-    ["sampleImage/6.png"],
-    ["sampleImage/7.png"],
-    ["sampleImage/watermark.png"],
-    ["sampleImage/water.png"],
+    ["data/image/1.png"],
+    ["data/image/2.png"],
+    ["data/image/3.png"],
+    ["data/image/4.png"],
+    ["data/image/5.png"],
+    ["data/image/6.png"],
+    ["data/image/7.png"],
+    ["data/image/watermark.png"],
+    ["data/image/water.png"],
 ]
 
 # 示例视频
 examples_videos = [
-    ["sampleVideo/person.mp4"],
-    ["sampleVideo/bezos_vogels_contentVideo.mp4"],
+    ["data/video/person.mp4"],
+    ["data/video/bezos_vogels_contentVideo.mp4"],
 ]
 
 # 构建界面Blocks上下文
 with gradio.Blocks() as demo:
-    gradio.Markdown("# 图像视频/处理")
+    gradio.Markdown("# SmartMultiModeAnalysis")
     gradio.Markdown("## 图像处理")
     
     # 原图预览和处理后图像预览
