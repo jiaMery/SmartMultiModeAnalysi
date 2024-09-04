@@ -1,1 +1,1 @@
-# SmartMultiModeAnalysi
+# SmartMultiModeAnalysis
