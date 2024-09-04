@@ -549,9 +549,9 @@ with gradio.Blocks() as demo:
         with gradio.Row():
             gradio.Examples(examples=examples_videos, inputs=[before_video], label="示例视频")
             # 按钮:智能视频分析
-            fn_open_webcam_btn = gradio.Button("视频智能分析")
+            fn_open_analysis_btn = gradio.Button("视频智能分析")
             # 按钮:关闭浏览器摄像头按钮
-            fn_close_webcam_btn = gradio.Button("关键帧抽取")
+            fn_key_frame_btn = gradio.Button("关键帧抽取")
             
         with gradio.Row():
             video_smart_analysis_result_text = gradio.Textbox(label="视频智能分析结果", lines=4, placeholder="点击按钮进行分析...",)
@@ -562,8 +562,8 @@ with gradio.Blocks() as demo:
         gradio.Examples(examples=examples_imgs, inputs=[key_frame], label="关键帧")
         
         # 绑定按钮功能
-        # fn_open_webcam_btn.click(fn=fn_open_webcam,outputs=[before_video])
-        # fn_close_webcam_btn.click(fn=fn_close_webcam,outputs=[before_video])
+        # fn_open_analysis_btn.click(fn=fn_open_webcam,outputs=[before_video])
+        # fn_key_frame_btn.click(fn=fn_close_webcam,outputs=[before_video])
         fn_screenshot_btn.click(fn=fn_screenshot,inputs=[before_video],outputs=[shotcut_video,before_img])
         fn_screenshot_webcam_btn.click(fn=fn_screenshot_webcam,inputs=[before_video_webcam],outputs=[shotcut_video,before_img])
         fn_screenshot_frame_5_btn.click(fn=fn_screenshot_frame_5,inputs=[before_video],outputs=[shotcut_video,before_img])
