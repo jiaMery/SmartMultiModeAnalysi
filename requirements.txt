@@ -1,0 +1,6 @@
+gradio
+boto3
+logging
+botocore
+langdetect
+argparse
