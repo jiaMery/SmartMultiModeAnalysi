@@ -4,3 +4,4 @@ logging
 botocore
 langdetect
 argparse
+opencv
