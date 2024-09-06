@@ -9,4 +9,4 @@ source env/bin/activate
 #Install the required packages
 pip install -r requirements.txt
 #start webui
-python webui2.py
+# python webui2.py

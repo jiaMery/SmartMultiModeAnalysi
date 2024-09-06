@@ -8,7 +8,7 @@ import time
 import shutil
 from PIL import Image
 
-##################start 功能函数##################
+##################start UI功能函数##################
 def fn_gray(image):
     '''
     图片转灰度函数
@@ -452,6 +452,7 @@ def fn_save_video_webcam(input_image):
     return output_path
 
 
+
 ##################end 功能函数##################
 
 ##################start 界面构建##################
@@ -536,22 +537,21 @@ with gradio.Blocks() as demo:
             fn_screenshot_webcam_btn = gradio.Button("摄像头截图")
             # 按钮:摄像头视频保存3s
             fn_save_video_webcam_btn = gradio.Button("摄像头视频保存")
-            # 按钮:添加水印功能
-            fn_add_watermark_video_btn = gradio.Button("添加水印")
             # 按钮:截取第五帧
             fn_screenshot_frame_5_btn = gradio.Button("截图第五帧")
             # 按钮:随机保存视频
             fn_save_video_random_btn = gradio.Button("随机保存视频")
             # 按钮:视频倒放
             fn_video_upend_btn = gradio.Button("倒放")
+            # 按钮:智能视频分析
+            fn_open_analysis_btn = gradio.Button("视频智能分析")
+            # 按钮:关闭浏览器摄像头按钮
+            fn_shutcut_analysis_btn = gradio.Button("截图分析")
 
         # 横向排列
         with gradio.Row():
             gradio.Examples(examples=examples_videos, inputs=[before_video], label="示例视频")
-            # 按钮:智能视频分析
-            fn_open_analysis_btn = gradio.Button("视频智能分析")
-            # 按钮:关闭浏览器摄像头按钮
-            fn_key_frame_btn = gradio.Button("关键帧抽取")
+            shotcut_analysis_video = gradio.Image(label="视频截图分析")
             
         with gradio.Row():
             video_smart_analysis_result_text = gradio.Textbox(label="视频智能分析结果", lines=4, placeholder="点击按钮进行分析...",)
@@ -559,16 +559,20 @@ with gradio.Blocks() as demo:
         
         # 关键帧展示
         key_frame = gradio.Image(label="单帧关键帧展示")
-        gradio.Examples(examples=examples_imgs, inputs=[key_frame], label="关键帧")
+        with gradio.Row():
+            gradio.Examples(examples=examples_imgs, inputs=[key_frame], label="关键帧")
+            # keyframe_text = gradio.Textbox(label="预警提示", lines=4, placeholder="点击按钮进行分析...",)
         
         # 绑定按钮功能
-        # fn_open_analysis_btn.click(fn=fn_open_webcam,outputs=[before_video])
-        # fn_key_frame_btn.click(fn=fn_close_webcam,outputs=[before_video])
+        # ____改这里
+        fn_open_analysis_btn.click(fn=fn_screenshot,inputs=[before_video],outputs=[after_video])
+        fn_shutcut_analysis_btn.click(fn=fn_screenshot,inputs=[shotcut_video],outputs=[video_smart_analysis_result_text,notification_text])
+        #——————
+
         fn_screenshot_btn.click(fn=fn_screenshot,inputs=[before_video],outputs=[shotcut_video,before_img])
         fn_screenshot_webcam_btn.click(fn=fn_screenshot_webcam,inputs=[before_video_webcam],outputs=[shotcut_video,before_img])
         fn_screenshot_frame_5_btn.click(fn=fn_screenshot_frame_5,inputs=[before_video],outputs=[shotcut_video,before_img])
         fn_save_video_random_btn.click(fn=fn_save_video_random,inputs=[before_video],outputs=[after_video])
-        fn_add_watermark_video_btn.click(fn=fn_add_watermark_video,inputs=[before_video],outputs=[after_video])
         fn_video_upend_btn.click(fn=fn_video_upend,inputs=[before_video],outputs=[after_video])
         fn_save_video_webcam_btn.click(fn=fn_save_video_webcam,inputs=[before_video_webcam],outputs=[after_video])
 
