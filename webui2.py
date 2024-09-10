@@ -488,6 +488,11 @@ bedrock_summaries = []
 # 关键帧缓冲区
 key_frames = deque(maxlen=100)
 
+# 创建目录来存储帧
+image_dir = "/home/ec2-user/environment/SmartMultiModeAnalysis/data/processedVideo"
+os.makedirs(image_dir, exist_ok=True)
+snapshot_dir = "/home/ec2-user/environment/SmartMultiModeAnalysis/data/processedSnapshot"
+os.makedirs(snapshot_dir, exist_ok=True)
 
 def fn_open_analysis(video):
     print(video)
@@ -496,14 +501,10 @@ def fn_open_analysis(video):
 
     output_path = f'video_analysis_{random.randint(100,200)}.mp4'
     
-
-
     # 处理视频帧
     frames = process_frames(video,bedrock_cache,bedrock_frame_count)
     
-    # 创建目录来存储帧
-    image_dir = "/home/ec2-user/environment/SmartMultiModeAnalysis/data/processedVideo"
-    os.makedirs(image_dir, exist_ok=True)
+    
     
     # 创建临时目录来存储帧
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -791,27 +792,33 @@ def save_frame_to_s3(frame):
     return image_id
 
 
-
-"""def fn_screenshot_analysis(shotcut_video):
-
+#摄像头截图分析
+def fn_screenshot_analysis(shotcut_video):
+    
+    print(type(shotcut_video))
      # 调用 AWS 服务进行分析
-    face_detection = rekognition.detect_faces(Image={'Bytes': frame['data']})
-    object_detection = rekognition.detect_labels(Image={'Bytes': frame['data']})
-    text_detection = rekognition.detect_text(Image={'Bytes': frame['data']})
-    moderated_content = rekognition.detect_moderation_labels(Image={'Bytes': frame['data']})
+    face_detection = rekognition.detect_faces(Image={'Bytes': shotcut_video})
+    object_detection = rekognition.detect_labels(Image={'Bytes': shotcut_video})
+    text_detection = rekognition.detect_text(Image={'Bytes': shotcut_video})
+    #moderated_content = rekognition.detect_moderation_labels(Image={'Bytes': shotcut_video)
     print(face_detection)
     
     # 在图像上绘制边界框
     annotated_frame = draw_bounding_boxes(
-        frame['data'], 
+        shotcut_video, 
         face_detection['FaceDetails'], 
         object_detection['Labels']
         )
-
+    
+    
+    analyzied_snapshot_name = f"snapshot_analysis_{int(time.time())}.jpg"
+    
     # 将处理好的带红标图像保存到目录
-    local_frame_path = os.path.join(image_dir, f"frame{i:04d}.jpg")
+    local_frame_path = os.path.join(snapshot_dir, analyzied_snapshot_name)
     with open(local_frame_path, 'wb') as f:
-        f.write(annotated_frame)"""
+        f.write(annotated_frame)
+    
+    return analyzied_snapshot_name
 ##################start 界面构建##################
 
 # 示例图片
@@ -923,7 +930,7 @@ with gradio.Blocks() as demo:
         
         # 绑定按钮功能
         fn_open_analysis_btn.click(fn=fn_open_analysis,inputs=[before_video],outputs=[after_video])
-        #fn_shutcut_analysis_btn.click(fn=fn_screenshot_analysis,inputs=[shotcut_video],outputs=[video_smart_analysis_result_text,notification_text])
+        fn_shutcut_analysis_btn.click(fn=fn_screenshot_analysis,inputs=[shotcut_video],outputs=[video_smart_analysis_result_text,notification_text])
         
         
         fn_screenshot_btn.click(fn=fn_screenshot,inputs=[before_video],outputs=[shotcut_video,before_img])
