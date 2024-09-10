@@ -4,7 +4,7 @@
 ![Example Image](data/webUI/webui1.jpeg)
 ![Example Image](data/webUI/webui2.jpeg)
 ![Example Image](data/webUI/webui3.jpeg)
-![Example Image](data/webUI/webui3.jpeg)
+![Example Image](data/webUI/webui4.jpeg)
 
 # Installation
 
