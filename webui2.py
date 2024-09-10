@@ -826,7 +826,7 @@ def fn_screenshot_analysis(image: np.ndarray) -> np.ndarray:
     
     #返回带红框截图
     #return analyzied_snapshot_name
-    return object_detection,'bedrock'
+    return local_frame_path,str('bedrock')
 ##################start 界面构建##################
 
 # 示例图片
