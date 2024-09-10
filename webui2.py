@@ -632,6 +632,53 @@ def fn_open_analysis(video):
     
     return video_name,bedrock_summary
 
+#Analysis by Bedrock LLM
+def analysis_by_llm(image_cache):
+                    # 构建对话消息,包含文本和图片
+                native_request = {
+                    "anthropic_version": "bedrock-2023-05-31",
+                    "max_tokens": 512,
+                    "temperature": 0.5,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": []
+                        }
+                    ]
+                    }
+                    
+                    # 添加所有图片
+                for frame_data in image_cache:
+                    frame_base64 = base64.b64encode(frame_data).decode('utf-8')
+                    native_request["messages"][0]["content"].append({
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/jpeg",
+                            "data": frame_base64
+                        }
+                    })
+            
+                # 添加文本提示
+                native_request["messages"][0]["content"].append({
+                    "type": "text",
+                    "text": "你需要根据这些照片来生成一个总体介绍，描述图片中发生了什么，是否有异常情况如着火或可疑人员，大约50-100字"
+                })
+                
+                # Convert the native request to JSON.
+                requestJson = json.dumps(native_request)
+
+                response = bedrock.invoke_model(
+                    modelId=model_id,
+                    contentType="application/json",
+                    body=requestJson
+                )
+
+                # Decode the response body.
+                model_response = json.loads(response["body"].read())
+                # Extract and print the response text.
+                bedrock_summary = model_response["content"][0]["text"]
+                return bedrock_summary
 
 def process_frames(video_path,bedrock_cache, bedrock_frame_count):
     frames = []
@@ -688,50 +735,8 @@ def process_frames(video_path,bedrock_cache, bedrock_frame_count):
             
             # 每 5 帧调用一次 bedrock,去获取这5帧的总结
             if bedrock_frame_count == 5:
-                # 构建对话消息,包含文本和图片
-                native_request = {
-                    "anthropic_version": "bedrock-2023-05-31",
-                    "max_tokens": 512,
-                    "temperature": 0.5,
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": []
-                        }
-                    ]
-                    }
-                    
-                    # 添加所有图片
-                for frame_data in bedrock_cache:
-                    frame_base64 = base64.b64encode(frame_data).decode('utf-8')
-                    native_request["messages"][0]["content"].append({
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": "image/jpeg",
-                            "data": frame_base64
-                        }
-                    })
-            
-                # 添加文本提示
-                native_request["messages"][0]["content"].append({
-                    "type": "text",
-                    "text": "你需要根据这些照片来生成一个总体介绍，描述图片中发生了什么，是否有异常情况如着火或可疑人员，大约50-100字"
-                })
-                
-                # Convert the native request to JSON.
-                requestJson = json.dumps(native_request)
-
-                response = bedrock.invoke_model(
-                    modelId=model_id,
-                    contentType="application/json",
-                    body=requestJson
-                )
-
-                # Decode the response body.
-                model_response = json.loads(response["body"].read())
                 # Extract and print the response text.
-                bedrock_summary = model_response["content"][0]["text"]
+                bedrock_summary = analysis_by_llm(bedrock_cache)
                 print(bedrock_summary)
 
                 # 将当前批次的 bedrock_summary 添加到列表中
@@ -796,26 +801,26 @@ def draw_bounding_boxes(image_bytes, faces, labels):
 
 #摄像头截图分析
 def fn_screenshot_analysis(image: np.ndarray) -> np.ndarray:
-    
-    
+    snapshot_cache = []
     # 将NumPy数组编码为JPEG格式
     _, jpeg_data = cv2.imencode('.jpg', image)
  
     print(type(jpeg_data))
+
+    jpeg_data_bytes = jpeg_data.tobytes()
      # 调用 AWS 服务进行分析
-    face_detection = rekognition.detect_faces(Image={'Bytes': jpeg_data.tobytes()})
-    object_detection = rekognition.detect_labels(Image={'Bytes': jpeg_data.tobytes()})
-    text_detection = rekognition.detect_text(Image={'Bytes': jpeg_data.tobytes()})
+    face_detection = rekognition.detect_faces(Image={'Bytes': jpeg_data_bytes})
+    object_detection = rekognition.detect_labels(Image={'Bytes': jpeg_data_bytes})
+    text_detection = rekognition.detect_text(Image={'Bytes': jpeg_data_bytes})
     #moderated_content = rekognition.detect_moderation_labels(Image={'Bytes': shotcut_video)
     print(face_detection)
     
     # 在图像上绘制边界框
     annotated_frame = draw_bounding_boxes(
-        jpeg_data.tobytes(), 
+        jpeg_data_bytes, 
         face_detection['FaceDetails'], 
         object_detection['Labels']
         )
-    
     
     analyzied_snapshot_name = f"snapshot_analysis_{int(time.time())}.jpg"
     
@@ -823,10 +828,14 @@ def fn_screenshot_analysis(image: np.ndarray) -> np.ndarray:
     local_frame_path = os.path.join(snapshot_dir, analyzied_snapshot_name)
     with open(local_frame_path, 'wb') as f:
         f.write(annotated_frame)
+    snapshot_cache.append(jpeg_data_bytes)
+    bedrock_results = analysis_by_llm(snapshot_cache)
+
+    # 清理缓存
+    snapshot_cache=[]
     
-    #返回带红框截图
-    #return analyzied_snapshot_name
-    return local_frame_path,str('bedrock')
+    #返回带红框截图,bedrock分析结果
+    return local_frame_path,bedrock_results
 ##################start 界面构建##################
 
 # 示例图片
