@@ -551,17 +551,18 @@ with gradio.Blocks() as demo:
         # 横向排列
         with gradio.Row():
             gradio.Examples(examples=examples_videos, inputs=[before_video], label="示例视频")
-            shotcut_analysis_video = gradio.Image(label="视频截图分析")
+            shotcut_analysis_video = gradio.Image(label="视频截图分析-图示")
+            shotcut_analysis_text = gradio.Textbox(label="视频截图分析-文示", lines=4, placeholder="点击按钮开始分析...",)
             
         with gradio.Row():
-            video_smart_analysis_result_text = gradio.Textbox(label="视频智能分析结果", lines=4, placeholder="点击按钮进行分析...",)
-            notification_text = gradio.Textbox(label="预警提示", lines=4, placeholder="点击按钮进行分析...",)
+            video_smart_analysis_result_text = gradio.Textbox(label="视频智能分析结果", lines=4, placeholder="点击按钮开始分析...",)
+            notification_text = gradio.Textbox(label="预警提示", lines=4, placeholder="点击按钮开始分析...",)
         
         # 关键帧展示
         key_frame = gradio.Image(label="单帧关键帧展示")
         with gradio.Row():
             gradio.Examples(examples=examples_imgs, inputs=[key_frame], label="关键帧")
-            # keyframe_text = gradio.Textbox(label="预警提示", lines=4, placeholder="点击按钮进行分析...",)
+            # keyframe_text = gradio.Textbox(label="预警提示", lines=4, placeholder="点击按钮开始分析...",)
         
         # 绑定按钮功能
         # ____改这里
