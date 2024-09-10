@@ -538,7 +538,7 @@ def fn_open_analysis(video):
             frame_files.append(local_frame_path)
 
             # 将处理好的带红标图像上传到s3
-            image_id = save_frame_to_s3(annotated_frame)
+            # image_id = save_frame_to_s3(annotated_frame)
             
              # 将 frame 数据转换为 bytes
             frame_bytes = bytes(frame['data'])
@@ -549,34 +549,34 @@ def fn_open_analysis(video):
             # 将编码后的数据解码为字符串
             frame_base64_str = frame_base64.decode('utf-8')
             
-            guardrail_filter = "test"
-    #        guardrail_filter = bedrock.detect_pii_entities(Text=bedrock_summary['Summary'])
+    #         guardrail_filter = "test"
+    # #        guardrail_filter = bedrock.detect_pii_entities(Text=bedrock_summary['Summary'])
     
-            Item={
-                    'imageID': image_id,
-                    's3URL': f"https://cf.haozhiyu.fun/test/frame_{image_id}",
-                    'timestamp': timestamp,
-                    'faceDetection': face_detection,
-                    'objectsDetection': object_detection,
-                    'textDetection': text_detection,
-                    'moderatedContent': moderated_content,
-                    'guardrailFilter': guardrail_filter
-            }
+    #         Item={
+    #                 'imageID': image_id,
+    #                 's3URL': f"https://cf.haozhiyu.fun/test/frame_{image_id}",
+    #                 'timestamp': timestamp,
+    #                 'faceDetection': face_detection,
+    #                 'objectsDetection': object_detection,
+    #                 'textDetection': text_detection,
+    #                 'moderatedContent': moderated_content,
+    #                 'guardrailFilter': guardrail_filter
+    #         }
             
-            timestamp = str(timestamp)
-            image_id = json.dumps(image_id)
-            faceDetection = json.dumps(face_detection)
-            s3URL = str(f"https://cf.haozhiyu.fun/test/frame_{image_id}")
-            objectsDetection = json.dumps(object_detection)
-            textDetection = json.dumps(text_detection)
-            moderatedContent = json.dumps(moderated_content)
+            # timestamp = str(timestamp)
+            # image_id = json.dumps(image_id)
+            # faceDetection = json.dumps(face_detection)
+            # s3URL = str(f"https://cf.haozhiyu.fun/test/frame_{image_id}")
+            # objectsDetection = json.dumps(object_detection)
+            # textDetection = json.dumps(text_detection)
+            # moderatedContent = json.dumps(moderated_content)
             #bedrockSummary = json.dumps(bedrock_summary)
             
-            item = json.loads(json.dumps(Item), parse_float=Decimal)
+            # item = json.loads(json.dumps(Item), parse_float=Decimal)
     
-            table.put_item(
-                Item=item
-            )
+            # table.put_item(
+            #     Item=item
+            # )
     
     # 使用 FFmpeg 合成视频
     video_name = f"output_{int(time.time())}.mp4"
@@ -588,7 +588,7 @@ def fn_open_analysis(video):
 
     # 上传生成的视频到 S3
     #video_s3_key = f"processed_videos/output_{int(time.time())}.mp4"
-    s3_client.upload_file(f'./{video_name}', 'haozhiyu.fun', video_name)
+    # s3_client.upload_file(f'./{video_name}', 'haozhiyu.fun', video_name)
     
     #视频内容总结以及警告
     native_request = {
@@ -626,11 +626,11 @@ def fn_open_analysis(video):
                 'bedrock_summary': bedrock_summary
         }
         
-    table.put_item(
-            Item=Item_bedrock
-        )
+    # table.put_item(
+    #         Item=Item_bedrock
+    #     )
     
-    return video_name
+    return video_name,bedrock_summary
 
 
 def process_frames(video_path,bedrock_cache, bedrock_frame_count):
@@ -785,10 +785,10 @@ def draw_bounding_boxes(image_bytes, faces, labels):
     
     
 # 保存帧到 S3
-def save_frame_to_s3(frame):
-    image_id = str(uuid.uuid4())
-    s3_key = f"test/frame_{image_id}.jpg"
-    s3_client.put_object(Bucket='haozhiyu.fun', Key=s3_key, Body=frame)
+# def save_frame_to_s3(frame):
+#     image_id = str(uuid.uuid4())
+#     s3_key = f"test/frame_{image_id}.jpg"
+#     s3_client.put_object(Bucket='haozhiyu.fun', Key=s3_key, Body=frame)
     
     #s3_client.put_object(Bucket='haozhiyu.fun', Key=s3_key, Body=frame['data'])
     return image_id
@@ -820,7 +820,7 @@ def fn_screenshot_analysis(shotcut_video):
     with open(local_frame_path, 'wb') as f:
         f.write(annotated_frame)
     
-    return analyzied_snapshot_name
+    return analyzied_snapshot_name,''
 ##################start 界面构建##################
 
 # 示例图片
@@ -932,8 +932,8 @@ with gradio.Blocks() as demo:
         
         # 绑定按钮功能
         # ____改这里
-        fn_open_analysis_btn.click(fn=fn_screenshot,inputs=[before_video],outputs=[after_video])
-        fn_shutcut_analysis_btn.click(fn=fn_screenshot,inputs=[shotcut_video],outputs=[video_smart_analysis_result_text,notification_text])
+        fn_open_analysis_btn.click(fn=fn_open_analysis,inputs=[before_video],outputs=[after_video,video_smart_analysis_result_text])
+        fn_shutcut_analysis_btn.click(fn=fn_screenshot_analysis,inputs=[shotcut_video],outputs=[shotcut_analysis_video,shotcut_analysis_text])
         #——————
 
         fn_screenshot_btn.click(fn=fn_screenshot,inputs=[before_video],outputs=[shotcut_video,before_img])
