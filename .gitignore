@@ -1,5 +1,6 @@
 *.mp4
 *.jpg
+*.log
 *.js
 !jest.config.js
 *.d.ts
