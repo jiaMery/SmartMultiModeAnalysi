@@ -1,9 +1,10 @@
 # SmartMultiModeAnalysis
 
 # WebUI of SmartMultiModeAnalysis
-![Example Image](data/webUI/ui1.jpg)
-![Example Image](data/webUI/ui2.jpg)
-![Example Image](data/webUI/ui3.jpg)
+![Example Image](data/webUI/webui1.jpg)
+![Example Image](data/webUI/webui2.jpg)
+![Example Image](data/webUI/webui3.jpg)
+![Example Image](data/webUI/webui3.jpg)
 
 # Installation
 
@@ -45,7 +46,7 @@ pip install -r requirements.txt
 Start the application:
 
 ```
-python webui2.py
+python webui3.py
 ```
 
 Upload an audio file (in .mp4, .mov format).
