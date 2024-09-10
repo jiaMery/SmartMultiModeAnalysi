@@ -1,10 +1,10 @@
 # SmartMultiModeAnalysis
 
 # WebUI of SmartMultiModeAnalysis
-![Example Image](data/webUI/webui1.jpg)
-![Example Image](data/webUI/webui2.jpg)
-![Example Image](data/webUI/webui3.jpg)
-![Example Image](data/webUI/webui3.jpg)
+![Example Image](data/webUI/webui1.jpeg)
+![Example Image](data/webUI/webui2.jpeg)
+![Example Image](data/webUI/webui3.jpeg)
+![Example Image](data/webUI/webui3.jpeg)
 
 # Installation
 
