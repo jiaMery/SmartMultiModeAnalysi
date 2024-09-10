@@ -46,7 +46,7 @@ pip install -r requirements.txt
 Start the application:
 
 ```
-python webui3.py
+python webui2.py
 ```
 
 Upload an audio file (in .mp4, .mov format).
