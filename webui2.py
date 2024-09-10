@@ -795,19 +795,23 @@ def draw_bounding_boxes(image_bytes, faces, labels):
 
 
 #摄像头截图分析
-def fn_screenshot_analysis(shotcut_video):
+def fn_screenshot_analysis(image: np.ndarray) -> np.ndarray:
     
-    print(type(shotcut_video))
+    
+    # 将NumPy数组编码为JPEG格式
+    _, jpeg_data = cv2.imencode('.jpg', image)
+ 
+    print(type(jpeg_data))
      # 调用 AWS 服务进行分析
-    face_detection = rekognition.detect_faces(Image={'Bytes': shotcut_video})
-    object_detection = rekognition.detect_labels(Image={'Bytes': shotcut_video})
-    text_detection = rekognition.detect_text(Image={'Bytes': shotcut_video})
+    face_detection = rekognition.detect_faces(Image={'Bytes': jpeg_data.tobytes()})
+    object_detection = rekognition.detect_labels(Image={'Bytes': jpeg_data.tobytes()})
+    text_detection = rekognition.detect_text(Image={'Bytes': jpeg_data.tobytes()})
     #moderated_content = rekognition.detect_moderation_labels(Image={'Bytes': shotcut_video)
     print(face_detection)
     
     # 在图像上绘制边界框
     annotated_frame = draw_bounding_boxes(
-        shotcut_video, 
+        jpeg_data.tobytes(), 
         face_detection['FaceDetails'], 
         object_detection['Labels']
         )
@@ -820,7 +824,9 @@ def fn_screenshot_analysis(shotcut_video):
     with open(local_frame_path, 'wb') as f:
         f.write(annotated_frame)
     
-    return analyzied_snapshot_name,''
+    #返回带红框截图
+    #return analyzied_snapshot_name
+    return object_detection,'bedrock'
 ##################start 界面构建##################
 
 # 示例图片
