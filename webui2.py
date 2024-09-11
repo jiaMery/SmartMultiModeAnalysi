@@ -59,21 +59,16 @@ examples_imgs = [
     ["data/image/watermark.png"],
     ["data/image/water.png"],
 ]
-key_frame_image = [
-    ["data/processedVideo/frame0000.jpg"],
-    ["data/processedVideo/frame0002.jpg"],
-    ["data/processedVideo/frame0003.jpg"],
-    ["data/processedVideo/frame0004.jpg"],
-    ["data/processedVideo/frame0005.jpg"],
-    ["data/processedVideo/frame0006.jpg"],
-    ["data/processedVideo/frame0007.jpg"],
-    ["data/processedVideo/frame0008.jpg"],
-    ["data/processedVideo/frame0009.jpg"],
+face_collection = [
+    ["data/image/jeff.jpg"],
+    ["data/image/andy.jpg"],
+    ["data/image/andy_portrait.jpg"],
 ]
 # 示例视频
 examples_videos = [
     ["data/video/person.mp4"],
     ["data/video/bezos_vogels_contentVideo.mp4"],
+    ["data/video/livingroomfire.mp4"],
 ]
 
 ##################start 功能函数##################
@@ -799,39 +794,43 @@ with gradio.Blocks() as demo:
             fn_save_video_webcam_btn = gradio.Button("摄像头视频保存")
             # 按钮:截取第五帧
             fn_screenshot_frame_5_btn = gradio.Button("截图第五帧")
-            # 按钮:随机保存视频
-            fn_save_video_random_btn = gradio.Button("随机保存视频")
+            # # 按钮:随机保存视频
+            # fn_save_video_random_btn = gradio.Button("随机保存视频")
             # 按钮:视频倒放
             fn_video_upend_btn = gradio.Button("倒放")
             # 按钮:智能视频分析
             fn_open_analysis_btn = gradio.Button("视频智能分析")
-            # 按钮:关闭浏览器摄像头按钮
+            # 按钮:截图分析
             fn_shutcut_analysis_btn = gradio.Button("截图分析")
+            # 按钮:人脸验证
+            fn_face_comparison_btn = gradio.Button("人脸验证")
 
         # 横向排列
         with gradio.Row():
             gradio.Examples(examples=examples_videos, inputs=[before_video], label="示例视频")
             shotcut_analysis_video = gradio.Image(label="视频截图分析-图示")
             shotcut_analysis_text = gradio.Textbox(label="视频截图分析-文示", lines=4, placeholder="点击按钮开始分析...",)
+            face_comparison_text = gradio.Textbox(label="人脸验证结果", lines=4, placeholder="点击按钮开始分析...",)
             
         with gradio.Row():
             video_smart_analysis_result_text = gradio.Textbox(label="视频智能分析结果", lines=4, placeholder="点击按钮开始分析...",)
             # notification_text = gradio.Textbox(label="预警提示", lines=4, placeholder="点击按钮开始分析...",)
         
         # 关键帧展示
-        key_frame = gradio.Image(label="单帧关键帧展示")
+        face_how = gradio.Image(label="人脸展示")
         with gradio.Row():
-            # gradio.Examples(fn=fn_open_analysis,examples=key_frame_image, inputs=[key_frame], label="关键帧",cache_examples=True,outputs=[after_video,video_smart_analysis_result_text])
-            gradio.Examples(examples=key_frame_image, inputs=[key_frame], label="关键帧")
+            gradio.Examples(examples=face_collection, inputs=[face_how], label="人脸集合")
             # keyframe_text = gradio.Textbox(label="预警提示", lines=4, placeholder="点击按钮开始分析...",)
         
         # 绑定按钮功能
         fn_open_analysis_btn.click(fn=fn_open_analysis,inputs=[before_video],outputs=[after_video,video_smart_analysis_result_text])
         fn_shutcut_analysis_btn.click(fn=fn_screenshot_analysis,inputs=[shotcut_video],outputs=[shotcut_analysis_video,shotcut_analysis_text])
+        fn_face_comparison_btn.click(fn=fn_screenshot_analysis,inputs=[shotcut_video],outputs=[face_comparison_text])
+
         fn_screenshot_btn.click(fn=fn_screenshot,inputs=[before_video],outputs=[shotcut_video,before_img])
         fn_screenshot_webcam_btn.click(fn=fn_screenshot_webcam,inputs=[before_video_webcam],outputs=[shotcut_video,before_img])
         fn_screenshot_frame_5_btn.click(fn=fn_screenshot_frame_5,inputs=[before_video],outputs=[shotcut_video,before_img])
-        fn_save_video_random_btn.click(fn=fn_save_video_random,inputs=[before_video],outputs=[after_video])
+        # fn_save_video_random_btn.click(fn=fn_save_video_random,inputs=[before_video],outputs=[after_video])
         fn_video_upend_btn.click(fn=fn_video_upend,inputs=[before_video],outputs=[after_video])
         fn_save_video_webcam_btn.click(fn=fn_save_video_webcam,inputs=[before_video_webcam],outputs=[after_video])
 
