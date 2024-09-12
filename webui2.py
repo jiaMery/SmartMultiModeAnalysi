@@ -1,27 +1,75 @@
-import cv2
-import boto3
-import gradio
-import random
+import cv2,boto3,gradio,random,os,json,io
+import subprocess,time,shutil,base64,uuid,logging
 import numpy as np
-import os
-import subprocess
-import time
 from collections import deque
-import shutil
-from PIL import Image
-import tempfile
-import base64
-import json
-import uuid
-from datetime import datetime
-import io
-import subprocess
-from PIL import Image, ImageDraw
-from decimal import Decimal
+from PIL import Image,ImageDraw
+from datetime import datetime 
+# from decimal import Decimal
+from botocore.exceptions import ClientError,NoCredentialsError, PartialCredentialsError
+
+#指定可用区
+region = 'us-east-1'
+
+# AWS 客户端初始化
+session = boto3.Session()
+s3_client = session.client('s3',region_name=region)
+dynamodb = session.resource('dynamodb',region_name=region)
+table = dynamodb.Table('videoInfo')
+rekognition = session.client('rekognition',region_name=region)
+bedrock = boto3.client('bedrock-runtime',region_name=region)
+cloudwatchLog = boto3.client('logs',region_name=region)
+
+# Setup S3 Path to save history audio data
+bucket_prefix = 'smart-analysis'
+s3_keyframe_path = 'keyframe/'
+s3_processed_video_path = 'processed-video/'
+bucket_name = ''
+
+#Setup CloudWatch Log
+LOG_GROUP_NAME = '/aws/smartAnalysis'
+LOG_STREAM_NAME = 'smartAnalysisStream'
+
+# 设置模型 ID,例如 Amazon Titan Text G1 - Express
+model_id = "anthropic.claude-3-sonnet-20240229-v1:0"
 
 
+# 初始化缓存变量
+bedrock_cache = []
+bedrock_frame_count = 0
+bedrock_summaries = []
 
+# 关键帧缓冲区
+key_frames = deque(maxlen=100)
 
+# 创建目录来存储帧
+image_dir = "./data/processedVideo"
+os.makedirs(image_dir, exist_ok=True)
+snapshot_dir = "./data/processedSnapshot"
+os.makedirs(snapshot_dir, exist_ok=True)
+
+# 示例图片
+examples_imgs = [
+    ["data/image/1.png"],
+    ["data/image/2.png"],
+    ["data/image/3.png"],
+    ["data/image/4.png"],
+    ["data/image/5.png"],
+    ["data/image/6.png"],
+    ["data/image/7.png"],
+    ["data/image/watermark.png"],
+    ["data/image/water.png"],
+]
+face_collection = [
+    ["data/image/jeff.jpg"],
+    ["data/image/andy.jpg"],
+    ["data/image/andy_portrait.jpg"],
+]
+# 示例视频
+examples_videos = [
+    ["data/video/person.mp4"],
+    ["data/video/bezos_vogels_contentVideo.mp4"],
+    ["data/video/livingroomfire.mp4"],
+]
 
 ##################start 功能函数##################
 def fn_gray(image):
@@ -72,71 +120,6 @@ def fn_remove_noise(image, kernel_size=random.randint(1,100)):
     denoised_image = cv2.medianBlur(image, kernel_size)
     return denoised_image
 
-def fn_open_operation(image, kernel_size=random.randint(1,100)):
-    '''
-    开运算函数
-    参数：
-    - image: 输入的图像
-    - kernel_size: 开运算的核大小
-    返回：
-    - opened_image: 开运算后的图像
-    '''
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, kernel_size)
-    opened_image = cv2.morphologyEx(image, cv2.MORPH_OPEN, kernel)
-    return opened_image
-
-def fn_close_operation(image: np.ndarray, kernel_size: int = 3) -> np.ndarray:
-    '''
-    闭运算函数
-    参数：
-    - image: 输入的图像
-    - kernel_size: 卷积核大小,默认为3
-    返回：
-    - closed_image: 闭运算后的图像
-    '''
-    kernel = np.ones((kernel_size, kernel_size), np.uint8)
-    closed_image = cv2.morphologyEx(image, cv2.MORPH_CLOSE, kernel)
-    return closed_image
-
-def fn_connected_domains(image: np.ndarray) -> np.ndarray:
-    '''
-    连通域函数
-    参数：
-    - image: 输入的二值图像
-    返回：
-    - labeled_image: 标记了连通域的图像
-    - num_labels: 连通域的数量
-    '''
-    _, labeled_image = cv2.connectedComponents(image)
-    num_labels = np.max(labeled_image)
-    return labeled_image
-
-def fn_erosion(image: np.ndarray, kernel_size: int = 3) -> np.ndarray:
-    '''
-    腐蚀函数
-    参数：
-    - image: 输入的图像
-    - kernel_size: 卷积核大小,默认为3
-    返回：
-    - eroded_image: 腐蚀后的图像
-    '''
-    kernel = np.ones((kernel_size, kernel_size), np.uint8)
-    eroded_image = cv2.erode(image, kernel, iterations=1)
-    return eroded_image
-
-def fn_dilation(image: np.ndarray, kernel_size: int = 3) -> np.ndarray:
-    '''
-    膨胀函数
-    参数：
-    - image: 输入的图像
-    - kernel_size: 卷积核大小,默认为3
-    返回：
-    - dilated_image: 膨胀后的图像
-    '''
-    kernel = np.ones((kernel_size, kernel_size), np.uint8)
-    dilated_image = cv2.dilate(image, kernel, iterations=1)
-    return dilated_image
-
 def fn_watermark(image: np.ndarray, watermark_path: str = "data/image/water.png") -> np.ndarray:
     '''
     添加水印函数
@@ -158,200 +141,6 @@ def fn_watermark(image: np.ndarray, watermark_path: str = "data/image/water.png"
     # 添加水印
     watermarked_image = cv2.addWeighted(image, 1, watermark, 0.5, 0)
     return watermarked_image
-
-def fn_gaussian_filter(image: np.ndarray, kernel_size: int = 3, sigma: float = 0) -> np.ndarray:
-    '''
-    高斯滤波函数
-    参数：
-    - image: 输入的图像
-    - kernel_size: 卷积核大小,默认为3
-    - sigma: 高斯核标准差,默认为0
-    返回：
-    - filtered_image: 滤波后的图像
-    '''
-    filtered_image = cv2.GaussianBlur(image, (kernel_size, kernel_size), sigma)
-    return filtered_image
-
-def fn_median_filter(image: np.ndarray, kernel_size: int = 3) -> np.ndarray:
-    '''
-    中值滤波函数
-    参数：
-    - image: 输入的图像
-    - kernel_size: 卷积核大小,默认为3
-    返回：
-    - filtered_image: 滤波后的图像
-    '''
-    filtered_image = cv2.medianBlur(image, kernel_size)
-    return filtered_image
-
-def fn_mean_filter(image: np.ndarray, kernel_size: int = 3) -> np.ndarray:
-    '''
-    均值滤波函数
-    参数：
-    - image: 输入的图像
-    - kernel_size: 卷积核大小,默认为3
-    返回：
-    - filtered_image: 滤波后的图像
-    '''
-    kernel = np.ones((kernel_size, kernel_size), np.float32) / (kernel_size * kernel_size)
-    filtered_image = cv2.filter2D(image, -1, kernel)
-    return filtered_image
-
-def fn_gray_mapping(image: np.ndarray) -> np.ndarray:
-    '''
-    灰度映射函数
-    参数：
-    - image: 输入的图像
-    - mapping_func: 灰度映射函数
-    返回：
-    - mapped_image: 映射后的图像
-    '''
-    mapped_image = fn_binary(image)
-    return mapped_image
-
-def fn_image_enhancement(image: np.ndarray) -> np.ndarray:
-    '''
-    图像增强函数
-    参数：
-    - image: 输入的图像
-    - enhancement_func: 图像增强函数
-    返回：
-    - enhanced_image: 增强后的图像
-    '''
-    #enhanced_image = enhancement_func(image)
-    return image
-
-def fn_walsh_transform(signal: np.ndarray) -> np.ndarray:
-    '''
-    Walsh变换函数
-    参数：
-    - signal: 输入的信号
-    返回：
-    - transformed_signal: 变换后的信号
-    '''
-    transformed_signal = np.fft.ifftshift(np.fft.fft(signal))
-    return transformed_signal
-
-def fn_hadamard_transform(signal: np.ndarray) -> np.ndarray:
-    '''
-    Hadamard变换函数
-    参数：
-    - signal: 输入的信号
-    返回：
-    - transformed_signal: 变换后的信号
-    '''
-    transformed_signal = np.fft.ifftshift(np.fft.fft(signal))
-    return transformed_signal
-
-def fn_1d_dct(signal: np.ndarray) -> np.ndarray:
-    '''
-    一维离散余弦变换函数
-    参数：
-    - signal: 输入的信号
-    返回：
-    - transformed_signal: 变换后的信号
-    '''
-    transformed_signal = np.fft.ifftshift(np.fft.fft(signal))
-    return transformed_signal
-
-def fn_2d_dct(image: np.ndarray) -> np.ndarray:
-    '''
-    二维离散余弦变换函数
-    参数：
-    - image: 输入的图像
-    返回：
-    - transformed_image: 变换后的图像
-    '''
-    transformed_image = cv2.dct(image)
-    return transformed_image
-
-def fn_2d_continuous_fourier_transform(image: np.ndarray) -> np.ndarray:
-    '''
-    二维连续傅里叶变换函数
-    参数：
-    - image: 输入的图像
-    返回：
-    - transformed_image: 变换后的图像
-    '''
-    transformed_image = np.fft.fft2(image)
-    return transformed_image
-
-def fn_2d_discrete_fourier_transform(image: np.ndarray) -> np.ndarray:
-    '''
-    二维离散傅里叶变换函数
-    参数：
-    - image: 输入的图像
-    返回：
-    - transformed_image: 变换后的图像
-    '''
-    transformed_image = np.fft.fftshift(np.fft.fft2(image))
-    return transformed_image
-
-def fn_continuous_wavelet_transform(signal: np.ndarray) -> np.ndarray:
-    '''
-    连续小波变换函数
-    参数：
-    - signal: 输入的信号
-    - wavelet: 小波函数
-    返回：
-    - transformed_signal: 变换后的信号
-    '''
-    #transformed_signal = pywt.cwt(signal, wavelet)
-    return signal
-
-def fn_1d_discrete_wavelet_transform(signal: np.ndarray) -> np.ndarray:
-    '''
-    一维离散小波变换函数
-    参数：
-    - signal: 输入的信号
-    - wavelet: 小波函数
-    返回：
-    - transformed_signal: 变换后的信号
-    '''
-    #transformed_signal = pywt.wavedec(signal, wavelet)
-    return signal
-
-def fn_2d_discrete_wavelet_transform(image: np.ndarray) -> np.ndarray:
-    '''
-    二维离散小波变换函数
-    参数：
-    - image: 输入的图像
-    - wavelet: 小波函数
-    返回：
-    - transformed_image: 变换后的图像
-    '''
-    #transformed_image = pywt.wavedec2(image, wavelet)
-    return image
-
-def fn_image_skeletonization(image: np.ndarray) -> np.ndarray:
-    '''
-    图像骨架化函数
-    参数：
-    - image: 输入的二值图像
-    返回：
-    - skeletonized_image: 骨架化后的图像
-    '''
-    skeletonized_image = cv2.ximgproc.thinning(image)
-    return skeletonized_image
-
-# 打开摄像头并显示视频
-def fn_open_webcam(is_open:bool=True):
-    '''
-    打开摄像头画面
-    '''
-    global before_video_webcam
-    global before_video
-    before_video_webcam.visible = True
-    before_video.source="webcam"
-
-# 关闭摄像头画面
-def fn_close_webcam(is_open:bool=False):
-    '''
-    关闭摄像头画面
-    '''
-    global before_video_webcam
-    global before_video
-    before_video_webcam.visible=False
 
 # 获取摄像头当前帧并显示
 def fn_screenshot_webcam(image):
@@ -409,18 +198,8 @@ def fn_save_video_random(video_path):
     output_path = f'video_shotcut_{random.randint(100,200)}.mp4'
     shell_command = f'ffmpeg -i "{video_path}" -filter_complex "[0:v]split=2[top][bottom];[bottom]crop=iw:ih/2:0:0[bottom1];[top]crop=iw:ih/2:0:ih/2[top1];[top1][bottom1]vstack" -c:a copy "{output_path}"'
     subprocess.call(shell_command,shell=True)
-
-    return output_path
-
-# 视频添加水印
-def fn_add_watermark_video(video_path):
-    '''
-    给视频添加水印
-    '''
-    output_path = f'video_watermark_{random.randint(100,200)}.mp4'
-    watermark_text = f'qsbye_{random.randint(100,200)}'
-    shell_command = f'ffmpeg -i "{video_path}" -vf "drawtext=text=\'{watermark_text}\':x=w-tw-10:y=10:fontsize=24:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2" -c:a copy "{output_path}"'
-    subprocess.call(shell_command, shell=True)
+    # 上传生成的视频到 S3
+    s3_client.upload_file(f'./{output_path}', bucket_name, output_path)
     return output_path
 
 # 视频倒放
@@ -431,6 +210,8 @@ def fn_video_upend(video_path):
     output_path = f'video_upend_{random.randint(100,200)}.mp4'
     shell_command = f'ffmpeg -i "{video_path}" -vf "reverse" -af "areverse" "{output_path}"'
     subprocess.call(shell_command, shell=True)
+    # 上传生成的视频到 S3
+    s3_client.upload_file(f'./{output_path}', bucket_name, output_path)
     return output_path
 
 # 保存3s摄像头视频
@@ -463,39 +244,113 @@ def fn_save_video_webcam(input_image):
     subprocess.call(shell_command, shell=True)
     
     shutil.rmtree(temp_folder)
-    
+    # 上传生成的视频到 S3
+    s3_client.upload_file(f'./{output_path}', bucket_name, output_path)
     return output_path
 
+def does_bucket_exist(bucket_prefix):
+    """Check if there is any bucket with the given prefix."""
+    s3_client = boto3.client('s3')
+    try:
+        response = s3_client.list_buckets()
+        for bucket in response['Buckets']:
+            if bucket['Name'].startswith(bucket_prefix):
+                return bucket['Name']
+    except ClientError as e:
+        print(f"Error checking bucket existence: {e}")
+    return None
 
-##################end 功能函数##################
-# AWS 客户端初始化
-session = boto3.Session()
-s3_client = session.client('s3')
-dynamodb = session.resource('dynamodb')
-table = dynamodb.Table('videoInfo')
-rekognition = session.client('rekognition')
-bedrock = boto3.client('bedrock-runtime',region_name="us-east-1")
+def create_unique_bucket(bucket_prefix, region=None):
+    """Create an S3 bucket with a unique name."""
+    bucket_name = f"{bucket_prefix}-{uuid.uuid4()}"
+    print(bucket_name)
+    try:
+        if region is None or "us-east-1":
+            s3_client = boto3.client('s3')
+            s3_client.create_bucket(Bucket=bucket_name)
+        else:
+            s3_client = boto3.client('s3', region_name=region)
+            location = {'LocationConstraint': region}
+            s3_client.create_bucket(Bucket=bucket_name, CreateBucketConfiguration=location)
+        print(f"Bucket {bucket_name} created successfully.")
+        return bucket_name
+    except ClientError as e:
+        print(f"Error creating bucket: {e}")
+        return None
+    
+def does_folder_exist(bucket_name, folder_name):
+    """Check if a folder exists in the specified bucket."""
+    s3_client = boto3.client('s3')
+    try:
+        response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=folder_name + '/')
+        for obj in response.get('Contents', []):
+            if obj['Key'].startswith(folder_name + '/'):
+                return True
+    except ClientError as e:
+        print(f"Error checking folder existence: {e}")
+    return False
 
-# 设置模型 ID,例如 Amazon Titan Text G1 - Express
-model_id = "anthropic.claude-3-sonnet-20240229-v1:0"
+def create_folder(bucket_name, folder_name):
+    """Create a folder in the specified bucket."""
+    s3_client = boto3.client('s3')
+    try:
+        s3_client.put_object(Bucket=bucket_name, Key=(folder_name + '/'))
+        print(f"Folder {folder_name} created successfully in bucket {bucket_name}.")
+    except ClientError as e:
+        print(f"Error creating folder: {e}")
+
+# Create CloudWatch Log Group
+def create_log_group():
+    try:
+        cloudwatchLog.create_log_group(logGroupName=LOG_GROUP_NAME)
+    except cloudwatchLog.exceptions.ResourceAlreadyExistsException:
+        pass
 
 
-# 初始化缓存变量
-bedrock_cache = []
-bedrock_frame_count = 0
-bedrock_summaries = []
+def create_log_stream():
+    try:
+        cloudwatchLog.create_log_stream(logGroupName=LOG_GROUP_NAME, logStreamName=LOG_STREAM_NAME)
+    except cloudwatchLog.exceptions.ResourceAlreadyExistsException:
+        pass
 
-# 关键帧缓冲区
-key_frames = deque(maxlen=100)
 
-# 创建目录来存储帧
-image_dir = "/home/ec2-user/environment/SmartMultiModeAnalysis/data/processedVideo"
-os.makedirs(image_dir, exist_ok=True)
-snapshot_dir = "/home/ec2-user/environment/SmartMultiModeAnalysis/data/processedSnapshot"
-os.makedirs(snapshot_dir, exist_ok=True)
+def put_log_events(message):
+    response = cloudwatchLog.describe_log_streams(logGroupName=LOG_GROUP_NAME, logStreamNamePrefix=LOG_STREAM_NAME)
+    upload_sequence_token = response['logStreams'][0].get('uploadSequenceToken', None)
+
+    log_event = {
+        'logGroupName': LOG_GROUP_NAME,
+        'logStreamName': LOG_STREAM_NAME,
+        'logEvents': [
+            {
+                'timestamp': int(round(time.time() * 1000)),
+                'message': message
+            },
+        ],
+    }
+
+    if upload_sequence_token:
+        log_event['sequenceToken'] = upload_sequence_token
+
+    cloudwatchLog.put_log_events(**log_event)
+
+def cleanImage(folder_path):
+    entries = os.listdir(folder_path)
+    # 如果列表为空，说明文件夹为空
+    if not entries:
+        print("文件夹为空")
+    else:
+        print("文件夹不为空")
+    for entry in entries:
+        full_path = os.path.join(folder_path, entry)
+        if os.path.isfile(full_path):
+            os.remove(full_path)
+    print("已清空所有文件！")
 
 def fn_open_analysis(video):
-    print(video)
+    #清除上次分析文件
+    cleanImage(image_dir)
+    # print(video)
     video_bytes = cv2.VideoCapture(video)
     #print("video类型:{}".format(type(video)))
 
@@ -507,86 +362,84 @@ def fn_open_analysis(video):
     
     
     # 创建临时目录来存储帧
-    with tempfile.TemporaryDirectory() as temp_dir:
-        frame_files = []
+    # with tempfile.TemporaryDirectory() as temp_dir:
+    frame_files = []
         
     # 保存关键帧到 S3 并分析
-        for i, frame in enumerate(frames):
+    for i, frame in enumerate(frames):
             
-            timestamp = frame['timestamp']
+        timestamp = frame['timestamp']
+        # 调用 AWS 服务进行分析
+        face_detection = rekognition.detect_faces(Image={'Bytes': frame['data']})
+        object_detection = rekognition.detect_labels(Image={'Bytes': frame['data']})
+        text_detection = rekognition.detect_text(Image={'Bytes': frame['data']})
+        moderated_content = rekognition.detect_moderation_labels(Image={'Bytes': frame['data']})
+        print(face_detection)
+        # 在图像上绘制边界框
+        annotated_frame = draw_bounding_boxes(
+            frame['data'], 
+            face_detection['FaceDetails'], 
+            object_detection['Labels']
+        )
+        # 将处理好的带红标图像保存到目录
+        local_frame_path = os.path.join(image_dir, f"frame{i:04d}.jpg")
+        with open(local_frame_path, 'wb') as f:
+            f.write(annotated_frame)
+        frame_files.append(local_frame_path)
 
-            # 调用 AWS 服务进行分析
-            face_detection = rekognition.detect_faces(Image={'Bytes': frame['data']})
-            object_detection = rekognition.detect_labels(Image={'Bytes': frame['data']})
-            text_detection = rekognition.detect_text(Image={'Bytes': frame['data']})
-            moderated_content = rekognition.detect_moderation_labels(Image={'Bytes': frame['data']})
-            print(face_detection)
+        # 将处理好的带红标图像上传到s3
+        image_id = save_frame_to_s3(frame['data'],s3_keyframe_path)
             
-            # 在图像上绘制边界框
-            annotated_frame = draw_bounding_boxes(
-                frame['data'], 
-                face_detection['FaceDetails'], 
-                object_detection['Labels']
-            )
-
-            # 将处理好的带红标图像保存到目录
-            local_frame_path = os.path.join(image_dir, f"frame{i:04d}.jpg")
-            with open(local_frame_path, 'wb') as f:
-                f.write(annotated_frame)
-            frame_files.append(local_frame_path)
-
-            # 将处理好的带红标图像上传到s3
-            image_id = save_frame_to_s3(annotated_frame)
-            
-             # 将 frame 数据转换为 bytes
-            frame_bytes = bytes(frame['data'])
+         # 将 frame 数据转换为 bytes
+        frame_bytes = bytes(frame['data'])
         
-            # 使用 base64 模块进行编码
-            frame_base64 = base64.b64encode(frame_bytes)
+        # 使用 base64 模块进行编码
+        frame_base64 = base64.b64encode(frame_bytes)
             
-            # 将编码后的数据解码为字符串
-            frame_base64_str = frame_base64.decode('utf-8')
+        # 将编码后的数据解码为字符串
+        frame_base64_str = frame_base64.decode('utf-8')
             
-            guardrail_filter = "test"
-    #        guardrail_filter = bedrock.detect_pii_entities(Text=bedrock_summary['Summary'])
+    #         guardrail_filter = "test"
+    # #        guardrail_filter = bedrock.detect_pii_entities(Text=bedrock_summary['Summary'])
     
-            Item={
-                    'imageID': image_id,
-                    's3URL': f"https://cf.haozhiyu.fun/test/frame_{image_id}",
-                    'timestamp': timestamp,
-                    'faceDetection': face_detection,
-                    'objectsDetection': object_detection,
-                    'textDetection': text_detection,
-                    'moderatedContent': moderated_content,
-                    'guardrailFilter': guardrail_filter
-            }
+    #         Item={
+    #                 'imageID': image_id,
+    #                 's3URL': f"https://cf.haozhiyu.fun/test/frame_{image_id}",
+    #                 'timestamp': timestamp,
+    #                 'faceDetection': face_detection,
+    #                 'objectsDetection': object_detection,
+    #                 'textDetection': text_detection,
+    #                 'moderatedContent': moderated_content,
+    #                 'guardrailFilter': guardrail_filter
+    #         }
             
-            timestamp = str(timestamp)
-            image_id = json.dumps(image_id)
-            faceDetection = json.dumps(face_detection)
-            s3URL = str(f"https://cf.haozhiyu.fun/test/frame_{image_id}")
-            objectsDetection = json.dumps(object_detection)
-            textDetection = json.dumps(text_detection)
-            moderatedContent = json.dumps(moderated_content)
+            # timestamp = str(timestamp)
+            # image_id = json.dumps(image_id)
+            # faceDetection = json.dumps(face_detection)
+            # s3URL = str(f"https://cf.haozhiyu.fun/test/frame_{image_id}")
+            # objectsDetection = json.dumps(object_detection)
+            # textDetection = json.dumps(text_detection)
+            # moderatedContent = json.dumps(moderated_content)
             #bedrockSummary = json.dumps(bedrock_summary)
             
-            item = json.loads(json.dumps(Item), parse_float=Decimal)
+            # item = json.loads(json.dumps(Item), parse_float=Decimal)
     
-            table.put_item(
-                Item=item
-            )
+            # table.put_item(
+            #     Item=item
+            # )
     
     # 使用 FFmpeg 合成视频
     video_name = f"output_{int(time.time())}.mp4"
     
-    cmd = ['ffmpeg','-framerate','1', '-i', '/home/ec2-user/environment/SmartMultiModeAnalysis/data/processedVideo/frame%4d.jpg', video_name]
+    cmd = ['ffmpeg','-framerate','1', '-i', './data/processedVideo/frame%4d.jpg', video_name]
     retcode = subprocess.call(cmd)
     if not retcode == 0:
         raise ValueError('Error {} executing command: {}'.format(retcode, ' '.join(cmd)))    
 
     # 上传生成的视频到 S3
     #video_s3_key = f"processed_videos/output_{int(time.time())}.mp4"
-    s3_client.upload_file(f'/home/ec2-user/environment/SmartMultiModeAnalysis/{video_name}', 'haozhiyu.fun', video_name)
+    videoname_on_s3 = s3_processed_video_path+video_name
+    s3_client.upload_file(f'./{video_name}', bucket_name, videoname_on_s3)
     
     #视频内容总结以及警告
     native_request = {
@@ -617,6 +470,7 @@ def fn_open_analysis(video):
     model_response = json.loads(response["body"].read())
     # Extract and print the response text.
     bedrock_summary = model_response["content"][0]["text"]
+    put_log_events(f'Finish Bedrock Summary{bedrock_summary}')
     print(bedrock_summary)
     
     Item_bedrock={
@@ -624,12 +478,58 @@ def fn_open_analysis(video):
                 'bedrock_summary': bedrock_summary
         }
         
-    table.put_item(
-            Item=Item_bedrock
-        )
-    
-    return video_name
+    # table.put_item(
+    #         Item=Item_bedrock
+    #     )
+    return video_name,bedrock_summary
 
+#Analysis by Bedrock LLM
+def analysis_by_llm(image_cache):
+                    # 构建对话消息,包含文本和图片
+                native_request = {
+                    "anthropic_version": "bedrock-2023-05-31",
+                    "max_tokens": 512,
+                    "temperature": 0.5,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": []
+                        }
+                    ]
+                    }
+                    
+                    # 添加所有图片
+                for frame_data in image_cache:
+                    frame_base64 = base64.b64encode(frame_data).decode('utf-8')
+                    native_request["messages"][0]["content"].append({
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/jpeg",
+                            "data": frame_base64
+                        }
+                    })
+            
+                # 添加文本提示
+                native_request["messages"][0]["content"].append({
+                    "type": "text",
+                    "text": "你需要根据这些照片来生成一个总体介绍，描述图片中发生了什么，是否有异常情况如着火或可疑人员，大约50-100字"
+                })
+                
+                # Convert the native request to JSON.
+                requestJson = json.dumps(native_request)
+
+                response = bedrock.invoke_model(
+                    modelId=model_id,
+                    contentType="application/json",
+                    body=requestJson
+                )
+
+                # Decode the response body.
+                model_response = json.loads(response["body"].read())
+                # Extract and print the response text.
+                bedrock_summary = model_response["content"][0]["text"]
+                return bedrock_summary
 
 def process_frames(video_path,bedrock_cache, bedrock_frame_count):
     frames = []
@@ -686,50 +586,8 @@ def process_frames(video_path,bedrock_cache, bedrock_frame_count):
             
             # 每 5 帧调用一次 bedrock,去获取这5帧的总结
             if bedrock_frame_count == 5:
-                # 构建对话消息,包含文本和图片
-                native_request = {
-                    "anthropic_version": "bedrock-2023-05-31",
-                    "max_tokens": 512,
-                    "temperature": 0.5,
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": []
-                        }
-                    ]
-                    }
-                    
-                    # 添加所有图片
-                for frame_data in bedrock_cache:
-                    frame_base64 = base64.b64encode(frame_data).decode('utf-8')
-                    native_request["messages"][0]["content"].append({
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": "image/jpeg",
-                            "data": frame_base64
-                        }
-                    })
-            
-                # 添加文本提示
-                native_request["messages"][0]["content"].append({
-                    "type": "text",
-                    "text": "你需要根据这些照片来生成一个总体介绍，描述图片中发生了什么，是否有异常情况如着火或可疑人员，大约50-100字"
-                })
-                
-                # Convert the native request to JSON.
-                requestJson = json.dumps(native_request)
-
-                response = bedrock.invoke_model(
-                    modelId=model_id,
-                    contentType="application/json",
-                    body=requestJson
-                )
-
-                # Decode the response body.
-                model_response = json.loads(response["body"].read())
                 # Extract and print the response text.
-                bedrock_summary = model_response["content"][0]["text"]
+                bedrock_summary = analysis_by_llm(bedrock_cache)
                 print(bedrock_summary)
 
                 # 将当前批次的 bedrock_summary 添加到列表中
@@ -783,37 +641,35 @@ def draw_bounding_boxes(image_bytes, faces, labels):
     
     
 # 保存帧到 S3
-def save_frame_to_s3(frame):
+def save_frame_to_s3(frame,s3_path):
     image_id = str(uuid.uuid4())
-    s3_key = f"test/frame_{image_id}.jpg"
-    s3_client.put_object(Bucket='haozhiyu.fun', Key=s3_key, Body=frame)
-    
-    #s3_client.put_object(Bucket='haozhiyu.fun', Key=s3_key, Body=frame['data'])
+    s3_key = s3_path + f"frame_{image_id}.jpg"
+    s3_client.put_object(Bucket=bucket_name, Key=s3_key, Body=frame)
     return image_id
 
 
 #摄像头截图分析
 def fn_screenshot_analysis(image: np.ndarray) -> np.ndarray:
-    
-    
+    snapshot_cache = []
     # 将NumPy数组编码为JPEG格式
     _, jpeg_data = cv2.imencode('.jpg', image)
  
     print(type(jpeg_data))
+
+    jpeg_data_bytes = jpeg_data.tobytes()
      # 调用 AWS 服务进行分析
-    face_detection = rekognition.detect_faces(Image={'Bytes': jpeg_data.tobytes()})
-    object_detection = rekognition.detect_labels(Image={'Bytes': jpeg_data.tobytes()})
-    text_detection = rekognition.detect_text(Image={'Bytes': jpeg_data.tobytes()})
+    face_detection = rekognition.detect_faces(Image={'Bytes': jpeg_data_bytes})
+    object_detection = rekognition.detect_labels(Image={'Bytes': jpeg_data_bytes})
+    text_detection = rekognition.detect_text(Image={'Bytes': jpeg_data_bytes})
     #moderated_content = rekognition.detect_moderation_labels(Image={'Bytes': shotcut_video)
     print(face_detection)
     
     # 在图像上绘制边界框
     annotated_frame = draw_bounding_boxes(
-        jpeg_data.tobytes(), 
+        jpeg_data_bytes, 
         face_detection['FaceDetails'], 
         object_detection['Labels']
         )
-    
     
     analyzied_snapshot_name = f"snapshot_analysis_{int(time.time())}.jpg"
     
@@ -821,30 +677,107 @@ def fn_screenshot_analysis(image: np.ndarray) -> np.ndarray:
     local_frame_path = os.path.join(snapshot_dir, analyzied_snapshot_name)
     with open(local_frame_path, 'wb') as f:
         f.write(annotated_frame)
+    snapshot_cache.append(jpeg_data_bytes)
+    bedrock_results = analysis_by_llm(snapshot_cache)
+
+    # 清理缓存
+    snapshot_cache=[]
     
-    #返回带红框截图
-    #return analyzied_snapshot_name
-    return object_detection
+    #返回带红框截图,bedrock分析结果
+    return local_frame_path,bedrock_results
+    
+    
+#摄像头截图分析
+def fn_face_comparison(image: np.ndarray) -> np.ndarray:
+    collection_id = "videoAnalysis"
+    print(image)
+
+    snapshot_cache = []
+    # 将NumPy数组编码为JPEG格式
+    _, jpeg_data = cv2.imencode('.jpg', image)
+
+    print(type(jpeg_data))
+
+    jpeg_data_bytes = jpeg_data.tobytes()
+    
+    try:
+        response = rekognition.search_users_by_image(
+            CollectionId=collection_id,
+            Image={'Bytes': jpeg_data_bytes}
+        )
+        
+        result_dict = json.dumps(response)
+
+        # 检查是否有用户匹配
+        if 'UserMatches' in result_dict and len(result_dict['UserMatches']) > 0:
+            # 获取第一个用户匹配结果
+            user_match = result_dict['UserMatches'][0]
+    
+            # 检查用户状态是否为活跃状态
+            if user_match['User']['UserStatus'] == 'ACTIVE':
+                return "用户比对成功,开锁"
+            else:
+                return "用户状态不活跃,请重试"
+        else:
+            return "用户比对失败,请重试"
+            
+
+    except ClientError:
+        logger.exception(f'Failed to perform SearchUsersByImage with given image: {jpeg_data}')
+        raise
+    else:
+        print(response)
+        return response
+    
+    
+    
+    
+    
+##################end 功能函数####################
+# Setup Python Logs
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Create CloudWatch log group and stream
+create_log_group()
+create_log_stream()
+
+try:
+    logger.info("This is an info message")
+    put_log_events("This is an info message")
+except (NoCredentialsError, PartialCredentialsError) as e:
+    logger.error("AWS credentials not found or incomplete: %s", e)
+
+# Check if a bucket with the specified prefix exists
+bucket_name = does_bucket_exist(bucket_prefix)
+print(bucket_name)
+if bucket_name:
+    print(f"A bucket with prefix '{bucket_prefix}' already exists: {bucket_name}")
+else:
+    # Create a new unique bucket
+    bucket_name = create_unique_bucket(bucket_prefix, region)
+    print(bucket_name)
+if bucket_name:
+    # Check if the folder exists in the bucket
+    if does_folder_exist(bucket_name, s3_processed_video_path):
+        print(f"Folder '{s3_processed_video_path}' already exists in bucket '{bucket_name}'.")
+    else:
+        # Create the folder in the bucket
+        create_folder(bucket_name, s3_processed_video_path)
+    # Check if the folder exists in the bucket
+    if does_folder_exist(bucket_name, s3_keyframe_path):
+        print(f"Folder '{s3_keyframe_path}' already exists in bucket '{bucket_name}'.")
+    else:
+        # Create the folder in the bucket
+        create_folder(bucket_name, s3_keyframe_path)
+    # Check if the folder exists in the bucket
+    # if does_folder_exist(bucket_name, s3_Audio_path):
+    #     print(f"Folder '{s3_Audio_path}' already exists in bucket '{bucket_name}'.")
+    # else:
+    #     # Create the folder in the bucket
+    #     create_folder(bucket_name, s3_Audio_path)
+
 ##################start 界面构建##################
-
-# 示例图片
-examples_imgs = [
-    ["data/image/1.png"],
-    ["data/image/2.png"],
-    ["data/image/3.png"],
-    ["data/image/4.png"],
-    ["data/image/5.png"],
-    ["data/image/6.png"],
-    ["data/image/7.png"],
-    ["data/image/watermark.png"],
-    ["data/image/water.png"],
-]
-
-# 示例视频
-examples_videos = [
-    ["data/video/person.mp4"],
-    ["data/video/bezos_vogels_contentVideo.mp4"],
-]
 
 # 构建界面Blocks上下文
 with gradio.Blocks() as demo:
@@ -907,43 +840,45 @@ with gradio.Blocks() as demo:
             fn_screenshot_webcam_btn = gradio.Button("摄像头截图")
             # 按钮:摄像头视频保存3s
             fn_save_video_webcam_btn = gradio.Button("摄像头视频保存")
-            # 按钮:添加水印功能
-            fn_add_watermark_video_btn = gradio.Button("添加水印")
             # 按钮:截取第五帧
             fn_screenshot_frame_5_btn = gradio.Button("截图第五帧")
-            # 按钮:随机保存视频
-            fn_save_video_random_btn = gradio.Button("随机保存视频")
+            # # 按钮:随机保存视频
+            # fn_save_video_random_btn = gradio.Button("随机保存视频")
             # 按钮:视频倒放
             fn_video_upend_btn = gradio.Button("倒放")
-            # 按钮:关闭浏览器摄像头按钮
+            # 按钮:智能视频分析
+            fn_open_analysis_btn = gradio.Button("视频智能分析")
+            # 按钮:截图分析
             fn_shutcut_analysis_btn = gradio.Button("截图分析")
+            # 按钮:人脸验证
+            fn_face_comparison_btn = gradio.Button("人脸验证")
 
         # 横向排列
         with gradio.Row():
             gradio.Examples(examples=examples_videos, inputs=[before_video], label="示例视频")
-            # 按钮:智能视频分析
-            fn_open_analysis_btn = gradio.Button("视频智能分析")
-            # 按钮:关闭浏览器摄像头按钮
-            fn_key_frame_btn = gradio.Button("关键帧抽取")
+            shotcut_analysis_video = gradio.Image(label="视频截图分析-图示")
+            shotcut_analysis_text = gradio.Textbox(label="视频截图分析-文示", lines=4, placeholder="点击按钮开始分析...",)
+            face_comparison_text = gradio.Textbox(label="人脸验证结果", lines=4, placeholder="点击按钮开始分析...",)
             
         with gradio.Row():
-            video_smart_analysis_result_text = gradio.Textbox(label="视频智能分析结果", lines=4, placeholder="点击按钮进行分析...",)
-            notification_text = gradio.Textbox(label="预警提示", lines=4, placeholder="点击按钮进行分析...",)
+            video_smart_analysis_result_text = gradio.Textbox(label="视频智能分析结果", lines=4, placeholder="点击按钮开始分析...",)
+            # notification_text = gradio.Textbox(label="预警提示", lines=4, placeholder="点击按钮开始分析...",)
         
         # 关键帧展示
-        key_frame = gradio.Image(label="单帧关键帧展示")
-        gradio.Examples(examples=examples_imgs, inputs=[key_frame], label="关键帧")
+        face_how = gradio.Image(label="人脸展示")
+        with gradio.Row():
+            gradio.Examples(examples=face_collection, inputs=[face_how], label="人脸集合")
+            # keyframe_text = gradio.Textbox(label="预警提示", lines=4, placeholder="点击按钮开始分析...",)
         
         # 绑定按钮功能
-        fn_open_analysis_btn.click(fn=fn_open_analysis,inputs=[before_video],outputs=[after_video])
-        fn_shutcut_analysis_btn.click(fn=fn_screenshot_analysis,inputs=[shotcut_video],outputs=[video_smart_analysis_result_text])
-        
-        
+        fn_open_analysis_btn.click(fn=fn_open_analysis,inputs=[before_video],outputs=[after_video,video_smart_analysis_result_text])
+        fn_shutcut_analysis_btn.click(fn=fn_screenshot_analysis,inputs=[shotcut_video],outputs=[shotcut_analysis_video,shotcut_analysis_text])
+        fn_face_comparison_btn.click(fn=fn_face_comparison,inputs=[shotcut_video],outputs=[face_comparison_text])
+
         fn_screenshot_btn.click(fn=fn_screenshot,inputs=[before_video],outputs=[shotcut_video,before_img])
         fn_screenshot_webcam_btn.click(fn=fn_screenshot_webcam,inputs=[before_video_webcam],outputs=[shotcut_video,before_img])
         fn_screenshot_frame_5_btn.click(fn=fn_screenshot_frame_5,inputs=[before_video],outputs=[shotcut_video,before_img])
-        fn_save_video_random_btn.click(fn=fn_save_video_random,inputs=[before_video],outputs=[after_video])
-        fn_add_watermark_video_btn.click(fn=fn_add_watermark_video,inputs=[before_video],outputs=[after_video])
+        # fn_save_video_random_btn.click(fn=fn_save_video_random,inputs=[before_video],outputs=[after_video])
         fn_video_upend_btn.click(fn=fn_video_upend,inputs=[before_video],outputs=[after_video])
         fn_save_video_webcam_btn.click(fn=fn_save_video_webcam,inputs=[before_video_webcam],outputs=[after_video])
 
