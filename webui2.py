@@ -751,7 +751,9 @@ def associate_faces(collection_id, user_id, face_ids):
 #摄像头截图分析
 def fn_face_comparison(image: np.ndarray) -> np.ndarray:
     collection_id = 'videoAnalysis'
-    user_id = '12345682'
+    
+    #除第一次外，记得每次修改此id为一个新的值，否则重复提交同一个user-id会报参数类型错误
+    user_id = '123456'
 
     snapshot_cache = []
     # 将NumPy数组编码为JPEG格式
