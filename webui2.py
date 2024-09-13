@@ -1,6 +1,7 @@
 import cv2,boto3,gradio,random,os,json,io,string
 import subprocess,time,shutil,base64,uuid,logging
 import numpy as np
+from io import BytesIO
 from collections import deque
 from PIL import Image,ImageDraw
 from datetime import datetime 
@@ -698,32 +699,24 @@ def create_collection(collection_id):
 
 
 def add_faces_to_collection(photo_path, collection_id):
-
-    with open(photo_path, 'rb') as image_file:
-        image_bytes = image_file.read()
+    print(photo_path)
+    
+    imageTarget = open(photo_path, 'rb')
 
     ExternalImageId = ''.join(random.choices(string.digits, k= 6 ))
 
     response = rekognition.index_faces(CollectionId=collection_id,
-                                  Image={'Bytes': image_bytes},
+                                  Image={'Bytes': imageTarget.read()},
                                   ExternalImageId=ExternalImageId,
                                   MaxFaces=1,
                                   QualityFilter="AUTO",
                                   DetectionAttributes=['ALL'])
 
     print('Results for ' + photo_path)
-    print('Faces indexed:')
     for faceRecord in response['FaceRecords']:
         print('  Face ID: ' + faceRecord['Face']['FaceId'])
-        print('  Location: {}'.format(faceRecord['Face']['BoundingBox']))
 
-    print('Faces not indexed:')
-    for unindexedFace in response['UnindexedFaces']:
-        print(' Location: {}'.format(unindexedFace['FaceDetail']['BoundingBox']))
-        print(' Reasons:')
-        for reason in unindexedFace['Reasons']:
-            print('   ' + reason)
-    return len(response['FaceRecords'])
+    return response
 
 
 def create_user(collection_id, user_id):
@@ -750,7 +743,6 @@ def associate_faces(collection_id, user_id, face_ids):
         print(f'- associated {len(response["AssociatedFaces"])} faces')
     except ClientError:
         logger.exception("Failed to associate faces to the given user")
-        raise
     else:
         print(response)
         return response
@@ -759,7 +751,7 @@ def associate_faces(collection_id, user_id, face_ids):
 #摄像头截图分析
 def fn_face_comparison(image: np.ndarray) -> np.ndarray:
     collection_id = 'videoAnalysis'
-    user_id = '000001'
+    user_id = '12345682'
 
     snapshot_cache = []
     # 将NumPy数组编码为JPEG格式
@@ -782,20 +774,19 @@ def fn_face_comparison(image: np.ndarray) -> np.ndarray:
             raise e
 
     # Add local images to the collection
-    photos = ['data/image/andy.jpg', 'data/image/andyjassy.jpg','data/image/andyjassy2.jpg']
+    photos = ['data/image/andy.jpg', 'data/image/andyjassy.jpg']
     face_ids = []
     for photo in photos:
-        num_faces = add_faces_to_collection(photo, collection_id)
-        print(num_faces)
-        if num_faces > 0:
+        response = add_faces_to_collection(photo, collection_id)
+        if  response:
             if 'FaceRecords' in response:
                 for face_record in response['FaceRecords']:
                     face_id = face_record['Face']['FaceId']
                     face_ids.append(face_id)
-                    print(face_ids)
+                    #print(face_ids)
             else:
                 print(f"No faces detected in {photo}")
-
+    print(face_ids)
     # Create a new user
     create_user(collection_id, user_id)
 
@@ -804,13 +795,14 @@ def fn_face_comparison(image: np.ndarray) -> np.ndarray:
         
     #查询截图传来的照片，做比对
     try:
-        response = rekognition.search_users_by_image(
+        search_response = rekognition.search_users_by_image(
             CollectionId=collection_id,
             Image={'Bytes': jpeg_data_bytes}
         )
         
-        result_dict = json.loads(response)
-
+        print(type(search_response))
+        #result_dict = json.loads(search_response)
+        result_dict = search_response
         # 检查是否有用户匹配
         if 'UserMatches' in result_dict and len(result_dict['UserMatches']) > 0:
             # 获取第一个用户匹配结果
