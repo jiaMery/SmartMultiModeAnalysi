@@ -721,15 +721,32 @@ def add_faces_to_collection(photo_path, collection_id):
 
 def create_user(collection_id, user_id):
     
+        #检测user-id是否已存在，如果不存在，则创建新user
     try:
-        rekognition.create_user(
+        user_response = rekognition.list_users(CollectionId=collection_id)
+        existing_users = user_response['Users']
+        next_token = user_response.get('NextToken')
+    
+        # 如果有更多用户需要获取,则继续循环
+        while next_token:
+            user_response = rekognition.list_users(CollectionId=collection_id, NextToken=next_token)
+            existing_users.extend(user_response['Users'])
+            next_token = user_response.get('NextToken')
+    
+        # 检查要创建的用户是否已经存在
+        if any(user['UserId'] == user_id for user in existing_users):
+            print(f"User {user_id} already exists in collection {collection_id}")
+        else:
+            # 如果用户不存在,则创建新用户
+            rekognition.create_user(
             CollectionId=collection_id,
             UserId=user_id
         )
-    except ClientError:
-        logger.exception(f'Failed to create user with given user id: {user_id}')
-        raise
-
+            print(f"Creating user {user_id} in collection {collection_id}")
+    except rekognition.exceptions.ResourceNotFoundException:
+        print(f"Collection {collection_id} does not exist")
+    except Exception as e:
+        print(f"Error: {e}")
 
 def associate_faces(collection_id, user_id, face_ids):
 
@@ -789,9 +806,11 @@ def fn_face_comparison(image: np.ndarray) -> np.ndarray:
             else:
                 print(f"No faces detected in {photo}")
     print(face_ids)
-    # Create a new user
+    
+    
+    #创建user
     create_user(collection_id, user_id)
-
+    
     # Associate faces with the user
     associate_faces(collection_id, user_id, face_ids)
         
