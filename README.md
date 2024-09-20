@@ -2,9 +2,9 @@
 
 # WebUI of SmartMultiModeAnalysis
 ![Example Image](data/webUI-en/webui-en1.jpeg)
-![Example Image](data/webUI-en/webui-en1.jpeg)
-![Example Image](data/webUI-en/webui-en1.jpeg)
-![Example Image](data/webUI-en/webui-en1.jpeg)
+![Example Image](data/webUI-en/webui-en2.jpeg)
+![Example Image](data/webUI-en/webui-en3.jpeg)
+![Example Image](data/webUI-en/webui-en4.jpeg)
 
 # Installation
 
