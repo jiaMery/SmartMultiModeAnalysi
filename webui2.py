@@ -407,7 +407,7 @@ def fn_open_analysis(video):
                     "content": [
                         {
                             "type": "text",
-                            "text": "你需要根据如下文字进行总结，这些文字是视频的抽帧的集合，你要把这些帧发生的内容做统一的总结，比如发生了什么，是不是着火了，或者有可疑人来偷东西。如果出现这些任何危险的事情，需要调用agent，将危险信息告诉agent，文字如下:".join(bedrock_summaries)
+                            "text": "You need to summarize based on the following text, which is a collection of video frame captures. You should summarize the content happening in these frames, such as what happened, whether there was a fire, or if there were any suspicious people trying to steal things. If any of these dangerous situations occur, you need to call an agent and inform the agent of the dangerous information. The text is as follows:".join(bedrock_summaries)
                         }],
                 }
             ],
@@ -827,7 +827,7 @@ if bucket_name:
 
 # 构建界面Blocks上下文
 with gradio.Blocks() as demo:
-    gradio.Markdown("# Smar tMultiMode Analysis & Alarm")
+    gradio.Markdown("# Smart Multi-Mode Analysis & Alarm")
     gradio.Markdown("## Image processing")
     
     # Original image preview and processed image preview

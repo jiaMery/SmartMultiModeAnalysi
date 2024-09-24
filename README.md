@@ -32,9 +32,9 @@ source env/bin/activate
 or with conda:
 
 ```
-conda create -n smartChatbot
+conda create -n smartAnalysisAlarm
 
-conda activate smartChatbot
+conda activate smartAnalysisAlarm
 ```
 
 Install the required packages:
