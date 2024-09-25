@@ -1,10 +1,17 @@
-import cv2,boto3,gradio,random,os,json,io,string
+import cv2,boto3,botocore,gradio,random,os,json,io,string
 import subprocess,time,shutil,base64,uuid,logging
 import numpy as np
 from collections import deque
 from PIL import Image,ImageDraw
 from datetime import datetime 
 from botocore.exceptions import ClientError,NoCredentialsError, PartialCredentialsError
+
+# Other Config
+config = botocore.config.Config(
+    read_timeout=900,
+    connect_timeout=900,
+    retries={"max_attempts": 0}
+)
 
 # Specified availability zones
 region = 'us-east-1'
@@ -17,6 +24,8 @@ table = dynamodb.Table('videoInfo')
 rekognition = session.client('rekognition',region_name=region)
 bedrock = boto3.client('bedrock-runtime',region_name=region)
 cloudwatchLog = boto3.client('logs',region_name=region)
+bedrock_agent_runtime = boto3.client("bedrock-agent-runtime", region_name=region, config=config)
+bedrock_agent = boto3.client("bedrock-agent", region_name=region, config=config)
 
 # Setup S3 Path to save history audio data
 bucket_prefix = 'smart-analysis'
@@ -407,7 +416,9 @@ def fn_open_analysis(video):
                     "content": [
                         {
                             "type": "text",
-                            "text": "You need to summarize based on the following text, which is a collection of video frame captures. You should summarize the content happening in these frames, such as what happened, whether there was a fire, or if there were any suspicious people trying to steal things. If any of these dangerous situations occur, you need to call an agent and inform the agent of the dangerous information. The text is as follows:".join(bedrock_summaries)
+                            "text": "You need to summarize based on the following text, which is a collection of video frame captures. You should summarize the content happening \
+                                    in these frames, such as what happened, whether there was a fire, or if there were any suspicious people trying to steal things. If any of these \
+                                    dangerous situations occur whatever it is real or not, you need to call an agent and inform the agent of the dangerous information. The text is as follows:".join(bedrock_summaries)
                         }],
                 }
             ],
@@ -421,18 +432,32 @@ def fn_open_analysis(video):
                 body=requestJson
         )
 
-        # Decode the response body.
+    # Decode the response body.
     model_response = json.loads(response["body"].read())
     # Extract and print the response text.
     bedrock_summary = model_response["content"][0]["text"]
     put_log_events(f'Finish Bedrock Summary{bedrock_summary}')
     print(bedrock_summary)
     
-    Item_bedrock={
-                'imageID': "111",
-                'bedrock_summary': bedrock_summary
-        }
-    return video_name,bedrock_summary
+    agentId = bedrock_agent.list_agents()['agentSummaries'][0]['agentId']
+    agentAliasId = bedrock_agent.list_agent_aliases(agentId=agentId)['agentAliasSummaries'][0]['agentAliasId']
+    # Invoke Bedrock agent
+    response = bedrock_agent_runtime.invoke_agent(
+    agentId=agentId,      # Identifier for Agent
+    agentAliasId=agentAliasId, # Identifier for Agent Alias
+    sessionId='session123',    # Identifier used for the current session
+    inputText=bedrock_summary)
+
+    output = ""
+
+    stream = response.get('completion')
+    if stream:
+        for event in stream:
+            chunk = event.get('chunk')
+            if chunk:
+                output += chunk.get('bytes').decode()
+    put_log_events(f'Finish Bedrock {bedrock_summary}')
+    return video_name, bedrock_summary
 
 #Analysis by Bedrock LLM
 def analysis_by_llm(image_cache):
@@ -462,10 +487,13 @@ def analysis_by_llm(image_cache):
                     })
             
                 # Add text prompt
-                native_request["messages"][0]["content"].append({
-                    "type": "text",
-                    "text": "你需要根据这些照片来生成一个总体介绍，描述图片中发生了什么，是否有异常情况如着火或可疑人员，大约50-100字"
-                })
+                native_request["messages"][0]["content"].append(
+                    {
+                        "type": "text",
+                        "text": "You need to generate an overall introduction based on these photos, describing what happened in the images, whether there were any abnormal situations such as a \
+                                fire or suspicious individuals, approximately 50-100 words."
+                    }
+                )
                 
                 # Convert the native request to JSON.
                 requestJson = json.dumps(native_request)
@@ -544,7 +572,7 @@ def process_frames(video_path,bedrock_cache, bedrock_frame_count):
         frame_count += 1
 
     cap.release()
-    print(f"总共处理了 {frame_count} 帧")
+    print(f"Totally Processed {frame_count} frames!")
     return frames
     
     
