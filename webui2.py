@@ -57,13 +57,13 @@ os.makedirs(snapshot_dir, exist_ok=True)
 
 # Sample image
 examples_imgs = [
-    ["data/image/1.png"],
-    ["data/image/2.png"],
-    ["data/image/3.png"],
-    ["data/image/4.png"],
-    ["data/image/5.png"],
-    ["data/image/6.png"],
-    ["data/image/7.png"],
+    # ["data/image/1.png"],
+    # ["data/image/2.png"],
+    # ["data/image/3.png"],
+    # ["data/image/4.png"],
+    # ["data/image/5.png"],
+    # ["data/image/6.png"],
+    # ["data/image/7.png"],
     ["data/image/watermark.png"],
     ["data/image/water.png"],
 ]
@@ -856,24 +856,24 @@ if bucket_name:
 # 构建界面Blocks上下文
 with gradio.Blocks() as demo:
     gradio.Markdown("# Smart Multi-Mode Analysis & Alarm")
-    gradio.Markdown("## Image processing")
+    gradio.Markdown("## Image Processing")
     
     # Original image preview and processed image preview
     # Arranged vertically
     with gradio.Column():
         # Arranged horizontally
         with gradio.Row():
-            before_img = gradio.Image(label="Original image")
-            after_img = gradio.Image(label="Processed image")
+            before_img = gradio.Image(label="Original Image")
+            after_img = gradio.Image(label="Processed Image")
         # Arranged horizontally
         with gradio.Row():
-            gradio.Examples(examples=examples_imgs, inputs=[before_img],label="示例图片")
-        with gradio.Row(elem_id="Image processing function"):   
-            fn_gray_btn = gradio.Button("Grayscale image")
-            fn_binary_btn = gradio.Button("Binary image")
-            fn_salt_and_pepper_noise_btn = gradio.Button("Add salt and pepper noise")
-            fn_remove_noise_btn = gradio.Button("Remove regular noise")
-            fn_watermark_btn = gradio.Button("Add a frequency domain watermark")    
+            gradio.Examples(examples=examples_imgs, inputs=[before_img],label="Example Images")
+        with gradio.Row(elem_id="Image Processing Function"):   
+            fn_gray_btn = gradio.Button("Grayscale Image")
+            fn_binary_btn = gradio.Button("Binary Image")
+            fn_salt_and_pepper_noise_btn = gradio.Button("Add Salt and Pepper Noise")
+            fn_remove_noise_btn = gradio.Button("Remove Regular Noise")
+            fn_watermark_btn = gradio.Button("Add a Frequency Domain Watermark")    
 
         fn_gray_btn.click(fn=fn_gray, inputs=[before_img], outputs=after_img)
         fn_binary_btn.click(fn=fn_binary, inputs=[before_img], outputs=after_img)
@@ -884,33 +884,33 @@ with gradio.Blocks() as demo:
     gradio.Markdown("## Video Processing")
     with gradio.Column():
         with gradio.Row():
-            before_video = gradio.Video(label="Original video")
-            before_video_webcam = gradio.Image(sources="webcam", streaming=True,label="Camera preview",visible=True)
-            after_video = gradio.Video(label="Processed video")
-            shotcut_video = gradio.Image(label="Video screenshot")
-        gradio.Markdown("Video operation area")
+            before_video = gradio.Video(label="Original Video")
+            before_video_webcam = gradio.Image(sources="webcam", streaming=True,label="Camera Preview",visible=True)
+            after_video = gradio.Video(label="Processed Video")
+            shotcut_video = gradio.Image(label="Video Screenshot")
+        gradio.Markdown("Video Operation Area")
         with gradio.Row():
-            fn_screenshot_btn = gradio.Button("Video screenshot")
-            fn_screenshot_webcam_btn = gradio.Button("Camera screenshot")
-            fn_save_video_webcam_btn = gradio.Button("Save camera video")
-            fn_screenshot_frame_5_btn = gradio.Button("Take screenshot of the 5th frame")
-            fn_video_upend_btn = gradio.Button("Reverse playback")
-            fn_open_analysis_btn = gradio.Button("Video intelligent analysis")
-            fn_shutcut_analysis_btn = gradio.Button("Screenshot analysis")
-            fn_face_comparison_btn = gradio.Button("Face verification")
+            fn_screenshot_btn = gradio.Button("Video Screenshot")
+            fn_screenshot_webcam_btn = gradio.Button("Camera Screenshot")
+            fn_save_video_webcam_btn = gradio.Button("Save Camera Video")
+            fn_screenshot_frame_5_btn = gradio.Button("Take Screenshot of the 5th Frame")
+            fn_video_upend_btn = gradio.Button("Reverse Playback")
+            fn_open_analysis_btn = gradio.Button("Video Intelligent Analysis")
+            fn_shutcut_analysis_btn = gradio.Button("Screenshot Analysis")
+            fn_face_comparison_btn = gradio.Button("Face Verification")
 
         with gradio.Row():
-            gradio.Examples(examples=examples_videos, inputs=[before_video], label="Sample video")
-            shotcut_analysis_video = gradio.Image(label="Video screenshot analysis - illustrated")
-            shotcut_analysis_text = gradio.Textbox(label="Video screenshot analysis - textual", lines=4, placeholder="Click the button to start analysis...",)
-            face_comparison_text = gradio.Textbox(label="Face verification result", lines=4, placeholder="Click the button to start analysis...",)
+            gradio.Examples(examples=examples_videos, inputs=[before_video], label="Sample Video")
+            shotcut_analysis_video = gradio.Image(label="Video Screenshot Analysis - Illustrated")
+            shotcut_analysis_text = gradio.Textbox(label="Video Screenshot Analysis - Textual", lines=4, placeholder="Click the button to start analysis...",)
+            face_comparison_text = gradio.Textbox(label="Face Verification Result", lines=4, placeholder="Click the button to start analysis...",)
             
         with gradio.Row():
-            video_smart_analysis_result_text = gradio.Textbox(label="Video intelligent analysis result", lines=4, placeholder="Click the button to start analysis....",)
+            video_smart_analysis_result_text = gradio.Textbox(label="Video Intelligent Analysis Result", lines=4, placeholder="Click the button to start analysis....",)
 
-        face_how = gradio.Image(label="Face display")
+        face_how = gradio.Image(label="Face Display")
         with gradio.Row():
-            gradio.Examples(examples=face_collection, inputs=[face_how], label="Face collection")
+            gradio.Examples(examples=face_collection, inputs=[face_how], label="Face Collection")
 
         fn_open_analysis_btn.click(fn=fn_open_analysis,inputs=[before_video],outputs=[after_video,video_smart_analysis_result_text])
         fn_shutcut_analysis_btn.click(fn=fn_screenshot_analysis,inputs=[shotcut_video],outputs=[shotcut_analysis_video,shotcut_analysis_text])

@@ -1,0 +1,117 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Parameters : 
+  InstanceType: 
+    Description : EC2 instance type
+    Type : String
+    Default : t2.micro
+    AllowedValues :
+           - t2.micro
+           - c5.large
+           - c5.xlarge
+    ConstraintDescription : Must be a valid EC2 instance type 
+
+Resources:
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: smartAnalysisAlarm
+      GroupDescription: Security group for Smart AnalysisAlarm EC2 instance
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 7860
+          ToPort: 7860
+          CidrIp: 0.0.0.0/0
+  MyIAMRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 
+                - ec2.amazonaws.com
+            Action: 
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonBedrockFullAccess
+        - arn:aws:iam::aws:policy/AmazonCloudWatchEvidentlyFullAccess
+        - arn:aws:iam::aws:policy/AmazonCloudWatchRUMFullAccess
+        - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - arn:aws:iam::aws:policy/AWSOpsWorksCloudWatchLogs
+        - arn:aws:iam::aws:policy/AmazonRekognitionFullAccess
+
+  MyInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+        - Ref: MyIAMRole
+
+  MyEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: 
+        Fn::FindInMap:
+          - RegionToAMI
+          - Ref: AWS::Region
+          - AMI
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 100
+            VolumeType: gp3
+      "Tags" : [
+            {"Key" : "Name", "Value" : "smartMultiModeAnalysisAlarmInstance"},
+        ]
+      IamInstanceProfile: !Ref MyInstanceProfile
+      SecurityGroups:
+        - Ref: SecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+            #!/bin/bash
+
+            # install SSM Agent
+            # sudo snap install amazon-ssm-agent --classic
+            # sudo snap start amazon-ssm-agent
+
+            # clone repo from git
+            cd /home/ubuntu
+            git clone https://github.com/jiaMery/SmartMultiModeAnalysis.git
+            # change ownership of the web UI so that a regular user can start the server
+            sudo chown -R ubuntu:ubuntu SmartMultiModeAnalysis/
+            
+            # install Python3
+            # sudo apt update -y
+            # sudo apt install python3 -y
+            # sudo apt install python3-pip -y
+            # sudo apt install python3-venv -y
+            
+  MyEIP:
+    Type: AWS::EC2::EIP
+  MyEIPAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt MyEIP.AllocationId
+      InstanceId: !Ref MyEC2Instance
+Mappings:
+  RegionToAMI:
+    us-east-1:
+      AMI: ami-04a81a99f5ec58529
+Outputs:
+  WebUIURL:
+    Description: This is SmartMultiMode AnalysisAlarm Web UI URL, if you use IDE VSCode, you can copy this url to your browser.
+    Value: !Join
+        - ''
+        - - http://
+          - !Ref MyEIP
+          - :7860
+
+    
