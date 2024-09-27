@@ -1,7 +1,7 @@
 # SmartMultiModeAnalysis
 This is a Python project that allows you to:
 1. Perform Image/Video processing using Amazon EC2
-2. Intelligent Processing/Analysis Video file using Amazon Bedrock
+2. Intelligent Processing/Analysis Video using Amazon Bedrock
 3. Face Security Verification using Amazon Rekognition
 4. Raise an Alarm accroding to the bedrock analysis result by Amazon Bedrock Agent and SES
 the user-friendly interface built with Gradio.
