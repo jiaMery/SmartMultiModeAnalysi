@@ -781,7 +781,7 @@ def fn_face_comparison(image: np.ndarray) -> np.ndarray:
     create_user(collection_id, user_id)
     
     # Associate faces with the user
-    associate_faces(collection_id, user_id, face_ids)
+    # associate_faces(collection_id, user_id, face_ids)
         
     # Compare the screenshot photo sent against the database
     try:
