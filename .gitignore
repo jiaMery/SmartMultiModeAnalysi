@@ -1,5 +1,9 @@
-# *.mp4
 screenshot_*.jpg
+video_shotcut_*.mp4
+video_upend_*.mp4
+video_*.mp4
+video_analysis_*.mp4
+output_*.mp4
 *.log
 *.js
 !jest.config.js

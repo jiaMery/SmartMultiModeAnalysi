@@ -2,6 +2,6 @@ gradio
 boto3
 logging
 botocore
-opencv
+opencv-python-headless
 numpy
 

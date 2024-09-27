@@ -688,8 +688,7 @@ def add_faces_to_collection(photo_path, collection_id):
     return response
 
 
-def create_user(collection_id, user_id):
-    
+def create_user(collection_id, user_id,face_ids):
         # Check if the user-id exists, if not, create a new user
     try:
         user_response = rekognition.list_users(CollectionId=collection_id)
@@ -711,6 +710,8 @@ def create_user(collection_id, user_id):
             CollectionId=collection_id,
             UserId=user_id
         )
+            # Associate faces with the user
+            associate_faces(collection_id, user_id, face_ids)
             print(f"Creating user {user_id} in collection {collection_id}")
     except rekognition.exceptions.ResourceNotFoundException:
         print(f"Collection {collection_id} does not exist")
@@ -778,10 +779,7 @@ def fn_face_comparison(image: np.ndarray) -> np.ndarray:
     
     
     # Create a user
-    create_user(collection_id, user_id)
-    
-    # Associate faces with the user
-    # associate_faces(collection_id, user_id, face_ids)
+    create_user(collection_id, user_id,face_ids)
         
     # Compare the screenshot photo sent against the database
     try:
