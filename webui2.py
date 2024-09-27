@@ -872,13 +872,11 @@ with gradio.Blocks() as demo:
             fn_gray_btn = gradio.Button("Grayscale Image")
             fn_binary_btn = gradio.Button("Binary Image")
             fn_salt_and_pepper_noise_btn = gradio.Button("Add Salt and Pepper Noise")
-            fn_remove_noise_btn = gradio.Button("Remove Regular Noise")
             fn_watermark_btn = gradio.Button("Add a Frequency Domain Watermark")    
 
         fn_gray_btn.click(fn=fn_gray, inputs=[before_img], outputs=after_img)
         fn_binary_btn.click(fn=fn_binary, inputs=[before_img], outputs=after_img)
         fn_salt_and_pepper_noise_btn.click(fn=fn_salt_and_pepper_noise, inputs=[before_img], outputs=after_img)
-        fn_remove_noise_btn.click(fn=fn_remove_noise,inputs=[before_img],outputs=after_img)
         fn_watermark_btn.click(fn=fn_watermark, inputs=[before_img], outputs=after_img)
 
     gradio.Markdown("## Video Processing")
